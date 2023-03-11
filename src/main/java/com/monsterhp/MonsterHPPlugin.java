@@ -2,6 +2,7 @@ package com.monsterhp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.inject.Provides;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import javax.inject.Inject;
+
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -28,205 +30,177 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.Text;
 
+
 @Slf4j
 @PluginDescriptor(
-	name = "Monster HP Percentage"
+        name = "Monster HP Percentage"
 )
-public class MonsterHPPlugin extends Plugin
-{
-	@Inject
-	private Client client;
 
-	@Inject
-	private MonsterHPConfig config;
+public class MonsterHPPlugin extends Plugin {
+    @Inject
+    private Client client;
 
-	@Inject
-	private OverlayManager overlayManager;
+    @Inject
+    private MonsterHPConfig config;
 
-	@Inject
-	private MonsterHPOverlay monsterhpoverlay;
+    @Inject
+    private OverlayManager overlayManager;
 
-	@Getter(AccessLevel.PACKAGE)
-	private final Map<Integer, WanderingNPC> wanderingNPCs = new HashMap<>();
+    @Inject
+    private MonsterHPOverlay monsterhpoverlay;
 
-	private List<String> selectedNPCs = new ArrayList<>();
+    @Getter(AccessLevel.PACKAGE)
+    private final Map<Integer, WanderingNPC> wanderingNPCs = new HashMap<>();
 
-	private boolean npcShowAll = true;
+    private List<String> selectedNPCs = new ArrayList<>();
 
-	private HashMap<Integer, WorldPoint> npcLocations = new HashMap<>();
+    private boolean npcShowAll = true;
 
-	@Provides
-	MonsterHPConfig getConfig(ConfigManager configManager)
-	{
-		return configManager.getConfig(MonsterHPConfig.class);
-	}
-	@Override
-	protected void startUp() throws Exception
-	{
-		overlayManager.add(monsterhpoverlay);
-		selectedNPCs = getSelectedNPCs();
-		this.npcShowAll =  config.npcShowAll();
-		rebuildAllNpcs();
-	}
+    private HashMap<Integer, WorldPoint> npcLocations = new HashMap<>();
 
-	@Override
-	protected void shutDown() throws Exception
-	{
-		overlayManager.remove(monsterhpoverlay);
-		wanderingNPCs.clear();
-		npcLocations.clear();
-	}
+    @Provides
+    MonsterHPConfig getConfig(ConfigManager configManager) {
+        return configManager.getConfig(MonsterHPConfig.class);
+    }
 
-	@Subscribe
-	public void onNpcSpawned(NpcSpawned npcSpawned)
-	{
-		final NPC npc = npcSpawned.getNpc();
-		final String npcName = npc.getName();
-		final int npcId = npc.getId();
+    @Override
+    protected void startUp() throws Exception {
+        overlayManager.add(monsterhpoverlay);
+        selectedNPCs = getSelectedNPCs();
+        this.npcShowAll = config.npcShowAll();
+        rebuildAllNpcs();
+    }
 
-		if (checkNPCName(npcName)) return;
+    @Override
+    protected void shutDown() throws Exception {
+        overlayManager.remove(monsterhpoverlay);
+        wanderingNPCs.clear();
+        npcLocations.clear();
+    }
+
+    @Subscribe
+    public void onNpcSpawned(NpcSpawned npcSpawned) {
+        final NPC npc = npcSpawned.getNpc();
+        final String npcName = npc.getName();
+        final int npcId = npc.getId();
+
+        if (checkNPCName(npcName)) return;
 
 
-		wanderingNPCs.putIfAbsent(npc.getIndex(), new WanderingNPC(npc));
-		npcLocations.put(npc.getIndex(), npc.getWorldLocation());
-	}
+        wanderingNPCs.putIfAbsent(npc.getIndex(), new WanderingNPC(npc));
+        npcLocations.put(npc.getIndex(), npc.getWorldLocation());
+    }
 
-	@Subscribe
-	public void onNpcDespawned(NpcDespawned npcDespawned)
-	{
-		final NPC npc = npcDespawned.getNpc();
-		final String npcName = npc.getName();
+    @Subscribe
+    public void onNpcDespawned(NpcDespawned npcDespawned) {
+        final NPC npc = npcDespawned.getNpc();
+        final String npcName = npc.getName();
 
-		if (npcName == null || !selectedNPCs.contains(npcName.toLowerCase()))
-		{
-			return;
-		}
+        if (npcName == null || !selectedNPCs.contains(npcName.toLowerCase())) {
+            return;
+        }
 
-		wanderingNPCs.remove(npc.getIndex());
-		npcLocations.remove(npc.getIndex());
-	}
+        wanderingNPCs.remove(npc.getIndex());
+        npcLocations.remove(npc.getIndex());
+    }
 
-	@Subscribe
-	public void onGameStateChanged(GameStateChanged gameStateChanged)
-	{
-		if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN ||
-			gameStateChanged.getGameState() == GameState.HOPPING)
-		{
-			wanderingNPCs.clear();
-			npcLocations.clear();
-		}
-	}
+    @Subscribe
+    public void onGameStateChanged(GameStateChanged gameStateChanged) {
+        if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN ||
+                gameStateChanged.getGameState() == GameState.HOPPING) {
+            wanderingNPCs.clear();
+            npcLocations.clear();
+        }
+    }
 
-	@Subscribe
-	public void onGameTick(GameTick event)
-	{
-		HashMap<WorldPoint, Integer> locationCount = new HashMap<>();
-		for (WorldPoint location : npcLocations.values())
-		{
-			if (locationCount.containsKey(location))
-			{
-				locationCount.put(location, locationCount.get(location) + 1);
-			}
-			else
-			{
-				locationCount.put(location, 1);
-			}
-		}
-		for (NPC npc : client.getNpcs())
-		{
-			final String npcName = npc.getName();
-			// refactored npc name check to its own method
-			if (checkNPCName(npcName)) continue;
+    @Subscribe
+    public void onGameTick(GameTick event) {
+        HashMap<WorldPoint, Integer> locationCount = new HashMap<>();
+        for (WorldPoint location : npcLocations.values()) {
+            if (locationCount.containsKey(location)) {
+                locationCount.put(location, locationCount.get(location) + 1);
+            } else {
+                locationCount.put(location, 1);
+            }
+        }
+        for (NPC npc : client.getNpcs()) {
+            final String npcName = npc.getName();
+            // refactored npc name check to its own method
+            if (checkNPCName(npcName)) continue;
 
-			final WanderingNPC wnpc = wanderingNPCs.get(npc.getIndex());
+            final WanderingNPC wnpc = wanderingNPCs.get(npc.getIndex());
+            if (wnpc == null) {
+                continue;
+            }
 
-			if (wnpc == null)
-			{
-				continue;
-			}
+            if (config.showOverlay()) {
+                double monsterHP = ((double) npc.getHealthRatio() / (double) npc.getHealthScale() * 100);
+                if (!npc.isDead()) {
+                    if ((npc.getHealthRatio() / npc.getHealthScale() != 1)) {
+                        wnpc.setCurrentHp(monsterHP);
+                        wnpc.setCurrentLocation(npc.getWorldLocation());
+                        wnpc.setDead(false);
+                        if (locationCount.containsKey(wnpc.getCurrentLocation())) {
+                            wnpc.setOffset(locationCount.get(wnpc.getCurrentLocation()) - 1);
+                            locationCount.put(wnpc.getCurrentLocation(), locationCount.get(wnpc.getCurrentLocation()) - 1);
+                        }
+                    }
+                } else if (npc.isDead()) {
+                    wnpc.setCurrentHp(0);
+                    if (config.hideDeath()) {
+                        wnpc.setDead(true);
+                    }
+                }
 
-			if(config.showOverlay())
-			{
-				double monsterHP = ((double) npc.getHealthRatio() / (double) npc.getHealthScale() * 100);
-				if (!npc.isDead())
-				{
-					if((npc.getHealthRatio()/npc.getHealthScale() != 1))
-					{
-						wnpc.setCurrentHp(monsterHP);
-						wnpc.setCurrentLocation(npc.getWorldLocation());
-						wnpc.setDead(false);
-						if (locationCount.containsKey(wnpc.getCurrentLocation()))
-						{
-							wnpc.setOffset(locationCount.get(wnpc.getCurrentLocation())-1);
-							locationCount.put(wnpc.getCurrentLocation(), locationCount.get(wnpc.getCurrentLocation()) - 1);
-						}
-					}
-				}
-				else if(npc.isDead())
-				{
-					wnpc.setCurrentHp(0);
-					if(config.hideDeath())
-					{
-						wnpc.setDead(true);
-					}
-				}
+                npcLocations.put(wnpc.getNpcIndex(), wnpc.getCurrentLocation());
+            }
+        }
+    }
 
-				npcLocations.put(wnpc.getNpcIndex(), wnpc.getCurrentLocation());
-			}
-		}
-	}
+    private boolean checkNPCName(String npcName) {
+        if (npcName == null || !selectedNPCs.contains(npcName.toLowerCase())) {
+            // only care about names if we are not applying to all NPCs
+            return !this.npcShowAll;
+        }
+        return false;
+    }
 
-	private boolean checkNPCName(String npcName) {
-		if (npcName == null || !selectedNPCs.contains(npcName.toLowerCase()))
-		{
-			// only care about names if we are not applying to all NPCs
-			return !this.npcShowAll;
-		}
-		return false;
-	}
+    @Subscribe
+    public void onConfigChanged(ConfigChanged configChanged) {
+        if (Objects.equals(configChanged.getGroup(), "MonsterHP") && (Objects.equals(configChanged.getKey(), "npcShowAll") || Objects.equals(configChanged.getKey(), "npcToShowHp"))) {
+            selectedNPCs = getSelectedNPCs();
 
-	@Subscribe
-	public void onConfigChanged(ConfigChanged configChanged)
-	{
-		if (Objects.equals(configChanged.getGroup(), "MonsterHP") && (Objects.equals(configChanged.getKey(), "npcShowAll") || Objects.equals(configChanged.getKey(), "npcToShowHp"))) {
-			selectedNPCs = getSelectedNPCs();
+            this.npcShowAll = config.npcShowAll();
+            rebuildAllNpcs();
+        }
+    }
 
-			this.npcShowAll = config.npcShowAll();
-			rebuildAllNpcs();
-		}
-	}
+    @VisibleForTesting
+    List<String> getSelectedNPCs() {
+        String configNPCs = config.npcToShowHp().toLowerCase();
+        if (configNPCs.isEmpty()) {
+            return Collections.emptyList();
+        }
 
-	@VisibleForTesting
-	List<String> getSelectedNPCs()
-	{
-		String configNPCs = config.npcToShowHp().toLowerCase();
-		if (configNPCs.isEmpty())
-		{
-			return Collections.emptyList();
-		}
+        return Text.fromCSV(configNPCs);
+    }
 
-		return Text.fromCSV(configNPCs);
-	}
+    private void rebuildAllNpcs() {
+        wanderingNPCs.clear();
 
-	private void rebuildAllNpcs()
-	{
-		wanderingNPCs.clear();
+        if (client.getGameState() != GameState.LOGGED_IN &&
+                client.getGameState() != GameState.LOADING) {
+            // NPCs are still in the client after logging out, ignore them
+            return;
+        }
 
-		if (client.getGameState() != GameState.LOGGED_IN &&
-			client.getGameState() != GameState.LOADING)
-		{
-			// NPCs are still in the client after logging out, ignore them
-			return;
-		}
+        for (NPC npc : client.getNpcs()) {
+            final String npcName = npc.getName();
+            // refactored npc name check to its own method
+            if (checkNPCName(npcName)) continue;
 
-		for (NPC npc : client.getNpcs())
-		{
-			final String npcName = npc.getName();
-			// refactored npc name check to its own method
-			if (checkNPCName(npcName)) continue;
-
-			wanderingNPCs.putIfAbsent(npc.getIndex(), new WanderingNPC(npc));
-			npcLocations.put(npc.getIndex(), npc.getWorldLocation());
-		}
-	}
+            wanderingNPCs.putIfAbsent(npc.getIndex(), new WanderingNPC(npc));
+            npcLocations.put(npc.getIndex(), npc.getWorldLocation());
+        }
+    }
 }
